@@ -19,8 +19,7 @@ Resuscitating my 1990s 15-pin CH throttle by tearing its brain out and replacing
 5. Black: Index Toggle UP (bareward)
 6. Yellow: Index Toggle DOWN (wireward)
 
-**``Thumbstick'' padcone**
-They did something clever with the thumb``stick;'' it looks like we have white, blue, brown, and grey being used for the thumbstick, and there is probably some kind of level combo they used to derive diagonals.
+**Thumbstick d-pad cone**
 1. White: UP
 2. Blue: NEAR (toward user)
 3. Purple: FAR direction (away from user)
