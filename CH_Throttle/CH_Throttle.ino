@@ -6,8 +6,12 @@
 // 2015-11-18 - Updated to use the new Joystick library 
 //              written for Arduino IDE Version 1.6.6 and
 //              above.
-// 2016-05-13   Updated to use new dynamic Joystick library
+// 2016-05-13 - Updated to use new dynamic Joystick library
 //              that can be customized.
+//
+// Ruud Boer
+// June 2018  - Joystick with Arduino Leonardo
+//
 // Andrea Batch 
 // 2021-02-26 - Update for old CH throttle 
 //              based on Ruud Boer instructable
@@ -26,12 +30,25 @@
 //------------------------------------------------------------
 
 // CONFIG
-#define MAX_SWITCHES 12 // the number of BUTTONS (three on front of throttle, three on thumb, four for d-pad)
-byte switch_pin[MAX_SWITCHES] = {2,3,4,5,6,7,8,9,10,11,12,13}; // digital input pins -- we will not be using 13 for light
+#define MAX_SWITCHES 8 // the number of BUTTONS (three on front of throttle, three on thumb, four for d-pad)
+byte switch_pin[MAX_SWITCHES] = {2,3,4,5,6,7,8,9}; // digital input pins -- we will not be using 13 for light
+
+#define MAX_DPAD 4 //number of digital dpad buttons; probably 4 but who knows, maybe diagonals on other versions?
+byte dpad_pin[MAX_DPAD] = {10,11,12,13}; //UP, LEFT(NEAR), RIGHT(FAR), DOWN
+#define D_U_PIN 0
+#define D_N_PIN 1
+#define D_F_PIN 2
+#define D_D_PIN 3
+
+#define RADIUS 511 // radius of thumb joystick
+#define PI 3.14159265
+
 #define DEBOUNCE_TIME 5 // ms delay before the push button changes state
-#define RUD_DEBOUNCE_TIME 50 // ms delay before the held rudder toggle changes state; I choose 0.05 seconds bc change val is low.
+#define RUD_DEBOUNCE_TIME 50 // ms delay before the held rudder toggle changes state; I choose 0.05 seconds bc change val is low
+#define DPAD_DEBOUNCE_TIME 50 // ms delay before the held DPAD stops checking for multiple held buttons
 #define MAX_ANALOG 1 // the number of analog inputs
-byte analog_pin[MAX_ANALOG] = {A0}; // analog input pins THROT---for our CH throttle, use 2 analogs as digital for toggle to control sRUDDER!
+byte analog_pin[MAX_ANALOG] = {A0}; // analog input pins THROTTLE---for our CH throttle, use 2 analogs as digital for toggle to control sRUDDER!
+
 #define RUD_UPWD_PIN A1 // rotary encoder CLK input -- toggle on front of CH throttle DOWN
 #define RUD_DNWD_PIN A2 // rotary encoder DATA input -- toggle on front of CH throttle UP
 #define RUD_RESET_LOW 0 // first button pin for ENC reset to min or zero (throttle front LEFT)
@@ -44,10 +61,14 @@ byte analog_pin[MAX_ANALOG] = {A0}; // analog input pins THROT---for our CH thro
 
 // DECLARATIONS
 #include "Joystick.h"
+#include <math.h>
+
 Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,JOYSTICK_TYPE_JOYSTICK, MAX_SWITCHES, 0, true, true, true, false, false, false, true, true, false, false, false);
-byte reading, rud_reading, rud_dnwd_clk, rud_dnwd_clk_old, rud_upwd_clk, rud_upwd_clk_old;
+byte reading, rud_reading, dpad_reading, rud_dnwd_clk, rud_dnwd_clk_old, rud_upwd_clk, rud_upwd_clk_old;
 int analog_value[MAX_ANALOG+1]; // +1 for the rotary encoder value
-unsigned long debounce_time[MAX_SWITCHES+1]; // +1 for CLK of rotary encoder
+int dpad_state[MAX_DPAD]; // use the rebounce to allow for diagonals
+//int dpad_state_old[MAX_DPAD]; //we do not need an old because we are not pressing any buttons with this--we are setting x-y axis
+unsigned long debounce_time[MAX_SWITCHES+MAX_DPAD+1]; // initially, 8 for buttons, 1 for d-pad, +1 for CLK of rotary encoder
 byte switch_state[MAX_SWITCHES];
 byte switch_state_old[MAX_SWITCHES];
 // END DECLARATIONS
@@ -57,12 +78,66 @@ int read_rotary_encoder() {
   //Unlike Boer, we are using a controller without a clickable analog knob; all we have is the digital toggle on the front.
   //However, we can do something a little different with it: Holding it down sets rudder values lower, holding it up sets them higher.
   //Different from other buttons!
-  if (millis() > debounce_time[MAX_SWITCHES]) { // check if enough time has passed
-    debounce_time[MAX_SWITCHES] = millis() + (unsigned long)RUD_DEBOUNCE_TIME; //reset counter
+  if (millis() > debounce_time[MAX_SWITCHES+MAX_DPAD]) { // check if enough time has passed
+    debounce_time[MAX_SWITCHES+MAX_DPAD] = millis() + (unsigned long)RUD_DEBOUNCE_TIME; //reset counter
     if (!digitalRead(RUD_UPWD_PIN)) return 1; //add to rudder if upward pin read
     if (!digitalRead(RUD_DNWD_PIN)) return -1; //subtract from rudder if downward pin read
   }
   return 0;
+}
+
+void set_dpad_coords(){
+  //first, update the state with a debounce lag
+  for (byte i=0; i<MAX_DPAD; i++) { // read the dpad switches
+    dpad_reading = !digitalRead(dpad_pin[i]);
+    if (dpad_reading == dpad_state[i]) debounce_time[MAX_SWITCHES+i] = millis() + (unsigned long)DPAD_DEBOUNCE_TIME;
+    else if (millis() > debounce_time[MAX_SWITCHES+i]) dpad_state[MAX_SWITCHES+i] = dpad_reading;
+  } //END read the dpad1
+
+  //remember x2=x1+radius*sin(θ) and y2=y1-r*(1-cos(θ)); use θ=45 so
+  // we can just set from counterclockwise point if multiple pressed.
+  float xAxis = 0;
+  float yAxis = 0;
+  float deg = 45;
+  float rad = deg * PI / 180;
+  //this is a pretty naive way to do this; down and near direction on DPAD prioritized if coflict arises. May need to shorten time window.
+  //check for diagonals
+  if (dpad_state[D_D_PIN] && dpad_state[D_N_PIN]){
+    xAxis = RADIUS*sin(rad);
+    yAxis = (-1*RADIUS) - RADIUS*(1-cos(rad));      
+  }
+  else if (dpad_state[D_D_PIN] && dpad_state[D_F_PIN]){
+    xAxis = RADIUS + RADIUS*sin(rad);
+    yAxis = 0 - RADIUS*(1-cos(rad));      
+  }
+  else if (dpad_state[D_U_PIN] && dpad_state[D_N_PIN]){
+    xAxis = (-1*RADIUS) + RADIUS*sin(rad);
+    yAxis = 0 - RADIUS*(1-cos(rad));
+  }
+  else if (dpad_state[D_U_PIN] && dpad_state[D_F_PIN]){
+    xAxis = RADIUS*sin(rad);
+    yAxis = RADIUS - RADIUS*(1-cos(rad));      
+  }
+  else {
+    if (dpad_state[D_N_PIN]){
+      xAxis = -RADIUS;
+      yAxis = 0;
+    }
+    else if (dpad_state[D_D_PIN]){
+      xAxis = 0;
+      yAxis = -RADIUS;
+    }
+    else if (dpad_state[D_F_PIN]){
+      xAxis = RADIUS;
+      yAxis = 0;
+    }
+    else if (dpad_state[D_U_PIN]){
+      xAxis = 0;
+      yAxis = RADIUS;
+    }    
+  }
+  Joystick.setXAxis(xAxis);
+  Joystick.setYAxis(yAxis);
 }
 // END FUNCTIONS
 
@@ -74,8 +149,15 @@ void setup() {
   pinMode(RUD_UPWD_PIN,INPUT_PULLUP);
   pinMode(RUD_DNWD_PIN,INPUT_PULLUP);
 
-  Joystick.begin(false); 
+  Joystick.begin(false);
+  //axis ranges
+  Joystick.setXAxisRange(-1*RADIUS, RADIUS);
+  Joystick.setYAxisRange(-1*RADIUS, RADIUS);
+
+  //rudder range
   Joystick.setRudderRange(RUD_MIN, RUD_MAX);
+  
+  //throttle range
   Joystick.setThrottleRange(0, 1023);
 } // END SETUP
 
@@ -106,7 +188,8 @@ void loop() {
   else if (!digitalRead(switch_pin[RUD_RESET_LOW]) && !digitalRead(switch_pin[RUD_RESET_CTL])) analog_value[MAX_ANALOG] = RUD_MIN;
   else if (!digitalRead(switch_pin[RUD_RESET_UPR]) && !digitalRead(switch_pin[RUD_RESET_CTL])) analog_value[MAX_ANALOG] = RUD_MAX;
   analog_value[MAX_ANALOG] = analog_value[MAX_ANALOG] + read_rotary_encoder();
-  
+
+  set_dpad_coords();
   
   Joystick.setRudder(analog_value[MAX_ANALOG]);
   Joystick.setThrottle(analog_value[MAX_ANALOG-1]);
