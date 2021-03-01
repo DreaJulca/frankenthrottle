@@ -28,7 +28,7 @@ Resuscitating my 1990s 15-pin CH throttle by tearing its brain out and replacing
 **Thumb buttons** 
 1. Brown: TOP button
 2. Red: NEAR button
-3. Orange (Solid): BOTTOM buttom
+3. Orange (Solid): BOTTOM button
 
 **Potentiometer/Throttle**
 1. Yellow: 5v power in
