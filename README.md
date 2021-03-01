@@ -8,6 +8,34 @@ Resuscitating my 1990s 15-pin CH throttle by tearing its brain out and replacing
 4. Flash your Leonardo with the CH_Throttle script in this repo (**note: this is not yet done and you would currently be better off using one of Ruud Boer's scripts, a fork of which I have also added here for reference, and modifying it for the CH**).
 5. Connect the wires per the schematic that I am definitely going to add and not forget once I finish bringing my throttle back from the dead.
 
+# Wires
+**Front (away from user) buttons**
+1. Green: GROUND
+2. Red (Stripe): LEFT Pinky Button (from down-throttle POV)
+3. Orange (Stripe): CENTER Ring Button  
+4. White (Stripe): RIGHT Bird Button (from down-throttle POV)
+
+**Front (away from user) toggle**
+5. Black: Index Toggle UP (bareward)
+6. Yellow: Index Toggle DOWN (wireward)
+
+**``Thumbstick'' padcone**
+They did something clever with the thumb``stick;'' it looks like we have white, blue, brown, and grey being used for the thumbstick, and there is probably some kind of level combo they used to derive diagonals.
+1. White: UP
+2. Blue: NEAR (toward user)
+3. Purple: FAR direction (away from user)
+4. Grey: DOWN
+
+**Thumb buttons** 
+1. Brown: TOP button
+2. Red: NEAR button
+3. Orange (Solid): BOTTOM buttom
+
+**Potentiometer/Throttle**
+1. Yellow: 5v power in
+2. Blue: Analog pin out
+3. Unassigned: There is a third, unused tab for ground; I added the ground. You will probably need to as well.
+
 ## Reference material
 Shamelessly borrowed most of this from:
 * [Matthew Heironimus](https://www.instructables.com/Arduino-LeonardoMicro-as-Game-ControllerJoystick/)

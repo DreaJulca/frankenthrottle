@@ -20,6 +20,7 @@
 //        last one (usually middle) goes to A3. 
 //        Remember to put a resistor between the pins, but I do not remember which ones lols.
 //    5. LED goes to digital 13 in the test script. Have not picked which script to use yet tho.
+//    6. Potentiometers do not need resistors.
 //------------------------------------------------------------
 
 // CONFIG
