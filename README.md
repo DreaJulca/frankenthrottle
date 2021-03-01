@@ -15,26 +15,31 @@ Resuscitating my 1990s 15-pin CH throttle by tearing its brain out and replacing
 3. Orange (Stripe): CENTER Ring Button  
 4. White (Stripe): RIGHT Bird Button (from down-throttle POV)
 
+
 **Front (away from user) toggle**
+
 5. Black: Index Toggle UP (bareward)
 6. Yellow: Index Toggle DOWN (wireward)
 
-**``Thumbstick'' padcone**
-They did something clever with the thumb``stick;'' it looks like we have white, blue, brown, and grey being used for the thumbstick, and there is probably some kind of level combo they used to derive diagonals.
+
+**Thumbstick d-pad cone**
 1. White: UP
 2. Blue: NEAR (toward user)
 3. Purple: FAR direction (away from user)
 4. Grey: DOWN
 
+
 **Thumb buttons** 
 1. Brown: TOP button
 2. Red: NEAR button
-3. Orange (Solid): BOTTOM buttom
+3. Orange (Solid): BOTTOM button
+
 
 **Potentiometer/Throttle**
 1. Yellow: 5v power in
 2. Blue: Analog pin out
 3. Unassigned: There is a third, unused tab for ground; I added the ground. You will probably need to as well.
+
 
 ## Reference material
 Shamelessly borrowed most of this from:
