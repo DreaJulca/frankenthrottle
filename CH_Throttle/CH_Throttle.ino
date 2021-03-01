@@ -11,284 +11,106 @@
 // Andrea Batch 
 // 2021-02-26 - Update for old CH throttle 
 //              based on Ruud Boer instructable
+// 2021-03-01 - Scrap original version and use Ruud Boer 2018 
+//              as basis for throttle, and then add PWM pins.
 //  Things to note:
 //    1. The potentiometer only had 2 of its tabs connected when I cracked it open.
 //      I suspect this may have to change, but I am a little wary of doing so.
 //    2. Need to check and make sure potentiometer actually works. Use LED.
 //    3. Do not forget that the LED leg length matters, lol. Long leg goes to num pin.
 //    4. Pot: One pot tab goes to board 5v, another tab goes to GND, 
-//        last one (usually middle) goes to A3. 
+//        last one (usually middle) goes to, in this case, A0. 
 //        Remember to put a resistor between the pins, but I do not remember which ones lols.
 //    5. LED goes to digital 13 in the test script. Have not picked which script to use yet tho.
 //    6. Potentiometers do not need resistors.
 //------------------------------------------------------------
 
 // CONFIG
-#define MAX_SWITCHES 13 // the number of switches
-byte switch_pin[MAX_SWITCHES] = {2,3,4,5,6,7,8,9,10,11,12,14,15}; // digital input pins
+#define MAX_SWITCHES 12 // the number of BUTTONS (three on front of throttle, three on thumb, four for d-pad)
+byte switch_pin[MAX_SWITCHES] = {2,3,4,5,6,7,8,9,10,11,12,13}; // digital input pins -- we will not be using 13 for light
 #define DEBOUNCE_TIME 5 // ms delay before the push button changes state
-#define MAX_ANALOG 4 // the number of analog inputs
-byte analog_pin[MAX_ANALOG] = {A0,A1,A2,A3}; // analog input pins X,Y,Z,THROT
-#define ENC_CLK_PIN A4 // rotary encoder CLK input
-#define ENC_DAT_PIN A5 // rotary encoder DATA input
-#define ENC_MAX 127 // max value of the rotary encoder
-#define ENC_MIN -127 // min value of the rotary encoder
-#define ENC_ZERO 0 // value to jump to after pressing encoder switch
+#define RUD_DEBOUNCE_TIME 50 // ms delay before the held rudder toggle changes state; I choose 0.05 seconds bc change val is low.
+#define MAX_ANALOG 1 // the number of analog inputs
+byte analog_pin[MAX_ANALOG] = {A0}; // analog input pins THROT---for our CH throttle, use 2 analogs as digital for toggle to control sRUDDER!
+#define RUD_UPWD_PIN A1 // rotary encoder CLK input -- toggle on front of CH throttle DOWN
+#define RUD_DNWD_PIN A2 // rotary encoder DATA input -- toggle on front of CH throttle UP
+#define RUD_RESET_LOW 0 // first button pin for ENC reset to min or zero (throttle front LEFT)
+#define RUD_RESET_UPR 1 // first button pin for ENC reset to max, second for zero (throttle front CENTER)
+#define RUD_RESET_CTL 2 // second button pin for ENC reset to min or max, third for zero (throttle front RIGHT) 
+#define RUD_MAX 127 // max value of the rotary encoder
+#define RUD_MIN -127 // min value of the rotary encoder
+#define RUD_ZERO 0 // value to jump to after pressing encoder switch
 // END CONFIG
-
 
 // DECLARATIONS
 #include "Joystick.h"
 Joystick_ Joystick(JOYSTICK_DEFAULT_REPORT_ID,JOYSTICK_TYPE_JOYSTICK, MAX_SWITCHES, 0, true, true, true, false, false, false, true, true, false, false, false);
-byte reading, clk, clk_old;
-byte switch_state[MAX_SWITCHES];
-byte switch_state_old[MAX_SWITCHES];
+byte reading, rud_reading, rud_dnwd_clk, rud_dnwd_clk_old, rud_upwd_clk, rud_upwd_clk_old;
 int analog_value[MAX_ANALOG+1]; // +1 for the rotary encoder value
 unsigned long debounce_time[MAX_SWITCHES+1]; // +1 for CLK of rotary encoder
+byte switch_state[MAX_SWITCHES];
+byte switch_state_old[MAX_SWITCHES];
 // END DECLARATIONS
 
-// Create Joystick from original script
-//Joystick_ Joystick;
-
-// Set to true to test "Auto Send" mode or false to test "Manual Send" mode.
-//const bool testAutoSendMode = true;
-const bool testAutoSendMode = false;
-
-const unsigned long gcCycleDelta = 1000;
-const unsigned long gcAnalogDelta = 25;
-const unsigned long gcButtonDelta = 500;
-unsigned long gNextTime = 0;
-unsigned int gCurrentStep = 0;
-
-void testSingleButtonPush(unsigned int button)
-{
-  if (button > 0)
-  {
-    Joystick.releaseButton(button - 1);
+// FUNCTIONS
+int read_rotary_encoder() {
+  //Unlike Boer, we are using a controller without a clickable analog knob; all we have is the digital toggle on the front.
+  //However, we can do something a little different with it: Holding it down sets rudder values lower, holding it up sets them higher.
+  //Different from other buttons!
+  if (millis() > debounce_time[MAX_SWITCHES]) { // check if enough time has passed
+    debounce_time[MAX_SWITCHES] = millis() + (unsigned long)RUD_DEBOUNCE_TIME; //reset counter
+    if (!digitalRead(RUD_UPWD_PIN)) return 1; //add to rudder if upward pin read
+    if (!digitalRead(RUD_DNWD_PIN)) return -1; //subtract from rudder if downward pin read
   }
-  if (button < 32)
-  {
-    Joystick.pressButton(button);
-  }
+  return 0;
 }
+// END FUNCTIONS
 
-void testMultiButtonPush(unsigned int currentStep) 
-{
-  for (int button = 0; button < 32; button++)
-  {
-    if ((currentStep == 0) || (currentStep == 2))
-    {
-      if ((button % 2) == 0)
-      {
-        Joystick.pressButton(button);
-      } else if (currentStep != 2)
-      {
-        Joystick.releaseButton(button);
-      }
-    } // if ((currentStep == 0) || (currentStep == 2))
-    if ((currentStep == 1) || (currentStep == 2))
-    {
-      if ((button % 2) != 0)
-      {
-        Joystick.pressButton(button);
-      } else if (currentStep != 2)
-      {
-        Joystick.releaseButton(button);
-      }
-    } // if ((currentStep == 1) || (currentStep == 2))
-    if (currentStep == 3)
-    {
-      Joystick.releaseButton(button);
-    } // if (currentStep == 3)
-  } // for (int button = 0; button < 32; button++)
-}
-
-void testXYAxis(unsigned int currentStep)
-{
-  int xAxis;
-  int yAxis;
-  
-  if (currentStep < 256)
-  {
-    xAxis = currentStep - 127;
-    yAxis = -127;
-    Joystick.setXAxis(xAxis);
-    Joystick.setYAxis(yAxis);
-  } 
-  else if (currentStep < 512)
-  {
-    yAxis = currentStep - 256 - 127;
-    Joystick.setYAxis(yAxis);
-  }
-  else if (currentStep < 768)
-  {
-    xAxis = 128 - (currentStep - 512);
-    Joystick.setXAxis(xAxis);
-  }
-  else if (currentStep < 1024)
-  {
-    yAxis = 128 - (currentStep - 768);
-    Joystick.setYAxis(yAxis);
-  }
-  else if (currentStep < 1024 + 128)
-  {
-    xAxis = currentStep - 1024 - 127;
-    Joystick.setXAxis(xAxis);
-    Joystick.setYAxis(xAxis);
-  }
-}
-
-void testZAxis(unsigned int currentStep)
-{
-  if (currentStep < 128)
-  {
-    Joystick.setZAxis(-currentStep);
-  } 
-  else if (currentStep < 256 + 128)
-  {
-    Joystick.setZAxis(currentStep - 128 - 127);
-  } 
-  else if (currentStep < 256 + 128 + 127)
-  {
-    Joystick.setZAxis(127 - (currentStep - 383));
-  } 
-}
-
-void testHatSwitch(unsigned int currentStep)
-{
-  if (currentStep < 8)
-  {
-    Joystick.setHatSwitch(0, currentStep * 45);
-  }
-  else if (currentStep == 8)
-  {
-    Joystick.setHatSwitch(0, -1);
-  }
-  else if (currentStep < 17)
-  {
-    Joystick.setHatSwitch(1, (currentStep - 9) * 45);
-  }
-  else if (currentStep == 17)
-  {
-    Joystick.setHatSwitch(1, -1);
-  }
-  else if (currentStep == 18)
-  {
-    Joystick.setHatSwitch(0, 0);
-    Joystick.setHatSwitch(1, 0);
-  }
-  else if (currentStep < 27)
-  {
-    Joystick.setHatSwitch(0, (currentStep - 18) * 45);
-    Joystick.setHatSwitch(1, (8 - (currentStep - 18)) * 45);
-  }
-  else if (currentStep == 27)
-  {
-    Joystick.setHatSwitch(0, -1);
-    Joystick.setHatSwitch(1, -1);
-  }
-}
-
-void testThrottleRudder(unsigned int value)
-{
-  Joystick.setThrottle(value);
-  Joystick.setRudder(value);
-}
-
-void testXYZAxisRotation(unsigned int degree)
-{
-  Joystick.setRxAxis(degree);
-  Joystick.setRyAxis(degree);
-  Joystick.setRzAxis(degree * 2);
-}
-
+// SETUP
 void setup() {
+  for (byte i=0; i<MAX_SWITCHES; i++) pinMode(switch_pin[i],INPUT_PULLUP);
+  //pinMode(13,OUTPUT); // on board LED -- no longer used. Consider using 3 analogs for LEDs?
+  //digitalWrite(13,0);
+  pinMode(RUD_UPWD_PIN,INPUT_PULLUP);
+  pinMode(RUD_DNWD_PIN,INPUT_PULLUP);
 
-  // Set Range Values
-  Joystick.setXAxisRange(-127, 127);
-  Joystick.setYAxisRange(-127, 127);
-  Joystick.setZAxisRange(-127, 127);
-  Joystick.setRxAxisRange(0, 360);
-  Joystick.setRyAxisRange(360, 0);
-  Joystick.setRzAxisRange(0, 720);
-  Joystick.setThrottleRange(0, 255);
-  Joystick.setRudderRange(255, 0);
-  
-  if (testAutoSendMode)
-  {
-    Joystick.begin();
-  }
-  else
-  {
-    Joystick.begin(false);
-  }
-  
-  pinMode(A0, INPUT_PULLUP);
-  pinMode(LED_BUILTIN, OUTPUT);
-}
+  Joystick.begin(false); 
+  Joystick.setRudderRange(RUD_MIN, RUD_MAX);
+  Joystick.setThrottleRange(0, 1023);
+} // END SETUP
 
+// LOOP
 void loop() {
+  for (byte i=0; i<MAX_SWITCHES; i++) { // read the switches
+    reading = !digitalRead(switch_pin[i]);
+    if (reading == switch_state[i]) debounce_time[i] = millis() + (unsigned long)DEBOUNCE_TIME;
+    else if (millis() > debounce_time[i]) switch_state[i] = reading;
+    if (switch_state[i] != switch_state_old[i]) { // debounced button has changed state
+      // this code is executed once after change of state--if we decide to use analog pins for LEDs, change this to another loop for all LEDs
+      //digitalWrite(13,switch_state[i]);
+      if (switch_state[i]) Joystick.pressButton(i); else Joystick.releaseButton(i);
+      //if (i==10) analog_value[4] = RUD_ZERO; //lets not do that here; we only want to do this if all front buttons pressed
+      switch_state_old[i] = switch_state[i]; // store new state such that the above gets done only once
+    }
+  } //END read the switches
 
-  // System Disabled
-  if (digitalRead(A0) != 0)
-  {
-    // Turn indicator light off.
-    digitalWrite(LED_BUILTIN, 0);
-    return;
-  }
-
-  // Turn indicator light on.
-  digitalWrite(LED_BUILTIN, 1);
+    analog_value[MAX_ANALOG-1] = analogRead(A0);
+    if (analog_value[MAX_ANALOG-1] < 256) analog_value[MAX_ANALOG-1] = analog_value[MAX_ANALOG-1] * 1.5;
+    else if (analog_value[MAX_ANALOG-1] < 768) analog_value[MAX_ANALOG-1] = 256 + analog_value[MAX_ANALOG-1] / 2;
+    else analog_value[MAX_ANALOG-1] = 640 + (analog_value[MAX_ANALOG-1] - 768) * 1.5;
+    Joystick.setThrottle(analog_value[MAX_ANALOG-1]);
+    
+  // use 2 to 3 switches simultaneously (left, center, and right throttle-front buttons) to quickly calibrate the rotary encoder 
+  // (THIS SETS ROTARY ENCODER TO MIN, MAX, OR ZERO)
+  if (!digitalRead(switch_pin[RUD_RESET_LOW]) && !digitalRead(switch_pin[RUD_RESET_UPR]) && !digitalRead(switch_pin[RUD_RESET_CTL])) analog_value[MAX_ANALOG] = RUD_ZERO;
+  else if (!digitalRead(switch_pin[RUD_RESET_LOW]) && !digitalRead(switch_pin[RUD_RESET_CTL])) analog_value[MAX_ANALOG] = RUD_MIN;
+  else if (!digitalRead(switch_pin[RUD_RESET_UPR]) && !digitalRead(switch_pin[RUD_RESET_CTL])) analog_value[MAX_ANALOG] = RUD_MAX;
+  analog_value[MAX_ANALOG] = analog_value[MAX_ANALOG] + read_rotary_encoder();
   
-  if (millis() >= gNextTime)
-  {
-   
-    if (gCurrentStep < 33)
-    {
-      gNextTime = millis() + gcButtonDelta;
-      testSingleButtonPush(gCurrentStep);
-    } 
-    else if (gCurrentStep < 37)
-    {
-      gNextTime = millis() + gcButtonDelta;
-      testMultiButtonPush(gCurrentStep - 33);
-    }
-    else if (gCurrentStep < (37 + 256))
-    {
-      gNextTime = millis() + gcAnalogDelta;
-      testThrottleRudder(gCurrentStep - 37);
-    }
-    else if (gCurrentStep < (37 + 256 + 1024 + 128))
-    {
-      gNextTime = millis() + gcAnalogDelta;
-      testXYAxis(gCurrentStep - (37 + 256));
-    }
-    else if (gCurrentStep < (37 + 256 + 1024 + 128 + 510))
-    {
-      gNextTime = millis() + gcAnalogDelta;
-      testZAxis(gCurrentStep - (37 + 256 + 1024 + 128));
-    }
-    else if (gCurrentStep < (37 + 256 + 1024 + 128 + 510 + 28))
-    {
-      gNextTime = millis() + gcButtonDelta;
-      testHatSwitch(gCurrentStep - (37 + 256 + 1024 + 128 + 510));
-    }
-    else if (gCurrentStep < (37 + 256 + 1024 + 128 + 510 + 28 + 360))
-    {
-      gNextTime = millis() + gcAnalogDelta;
-      testXYZAxisRotation(gCurrentStep - (37 + 256 + 1024 + 128 + 510 + 28));
-    }
-    
-    if (testAutoSendMode == false)
-    {
-      Joystick.sendState();
-    }
-    
-    gCurrentStep++;
-    if (gCurrentStep == (37 + 256 + 1024 + 128 + 510 + 28 + 360))
-    {
-      gNextTime = millis() + gcCycleDelta;
-      gCurrentStep = 0;
-    }
-  }
-}
+  
+  Joystick.setRudder(analog_value[MAX_ANALOG]);
+  Joystick.setThrottle(analog_value[MAX_ANALOG-1]);
+  
+  Joystick.sendState();
+  delay(10);
+} // END LOOP
