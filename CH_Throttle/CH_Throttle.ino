@@ -30,27 +30,27 @@
 //------------------------------------------------------------
 
 // CONFIG
-#define MAX_SWITCHES 8 // the number of BUTTONS (three on front of throttle, three on thumb, four for d-pad)
-byte switch_pin[MAX_SWITCHES] = {2,3,4,5,6,7,8,9}; // digital input pins -- we will not be using 13 for light
+#define MAX_SWITCHES 6 // the number of BUTTONS (three on front of throttle, three on thumb--that leaves us two for toggle, four for dpad)
+byte switch_pin[MAX_SWITCHES] = {2,3,4,5,6,7}; // digital input pins -- we will not be using 13 for light
 
 #define MAX_DPAD 4 //number of digital dpad buttons; probably 4 but who knows, maybe diagonals on other versions?
 byte dpad_pin[MAX_DPAD] = {10,11,12,13}; //UP, LEFT(NEAR), RIGHT(FAR), DOWN
-#define D_U_PIN 0
+#define D_U_PIN 3  //really 0, but axes are inverted; fine for regular stick, not so fine for thumbstick
 #define D_N_PIN 1
 #define D_F_PIN 2
-#define D_D_PIN 3
+#define D_D_PIN 0
 
 #define RADIUS 511 // radius of thumb joystick
-#define PI 3.14159265
+//#define PI 3.14159265 //already defined
 
 #define DEBOUNCE_TIME 5 // ms delay before the push button changes state
-#define RUD_DEBOUNCE_TIME 50 // ms delay before the held rudder toggle changes state; I choose 0.05 seconds bc change val is low
-#define DPAD_DEBOUNCE_TIME 50 // ms delay before the held DPAD stops checking for multiple held buttons
+#define RUD_DEBOUNCE_TIME 10 // ms delay before the held rudder toggle changes state; I choose 0.05 seconds bc change val is low
+#define DPAD_DEBOUNCE_TIME 5// ms delay before the held DPAD stops checking for multiple held buttons... actually doesnt work as well as hoped
 #define MAX_ANALOG 1 // the number of analog inputs
-byte analog_pin[MAX_ANALOG] = {A0}; // analog input pins THROTTLE---for our CH throttle, use 2 analogs as digital for toggle to control sRUDDER!
+byte analog_pin[MAX_ANALOG] = {A0}; // analog input pins THROTTLE---for our CH throttle, use 2 analogs as digital for toggle to control RUDDER!
 
-#define RUD_UPWD_PIN A1 // rotary encoder CLK input -- toggle on front of CH throttle DOWN
-#define RUD_DNWD_PIN A2 // rotary encoder DATA input -- toggle on front of CH throttle UP
+#define RUD_UPWD_PIN 9 // rotary encoder CLK input -- toggle on front of CH throttle DOWN
+#define RUD_DNWD_PIN 8 // rotary encoder DATA input -- toggle on front of CH throttle UP
 #define RUD_RESET_LOW 0 // first button pin for ENC reset to min or zero (throttle front LEFT)
 #define RUD_RESET_UPR 1 // first button pin for ENC reset to max, second for zero (throttle front CENTER)
 #define RUD_RESET_CTL 2 // second button pin for ENC reset to min or max, third for zero (throttle front RIGHT) 
@@ -87,63 +87,13 @@ int read_rotary_encoder() {
 }
 
 void set_dpad_coords(){
-  //first, update the state with a debounce lag
-  for (byte i=0; i<MAX_DPAD; i++) { // read the dpad switches
-    dpad_reading = !digitalRead(dpad_pin[i]);
-    if (dpad_reading == dpad_state[i]) debounce_time[MAX_SWITCHES+i] = millis() + (unsigned long)DPAD_DEBOUNCE_TIME;
-    else if (millis() > debounce_time[MAX_SWITCHES+i]) dpad_state[MAX_SWITCHES+i] = dpad_reading;
-  } //END read the dpad1
-
-  //remember x2=x1+radius*sin(θ) and y2=y1-r*(1-cos(θ)); use θ=45 so
-  // we can just set from counterclockwise point if multiple pressed.
-  float xAxis = 0;
-  float yAxis = 0;
-  float deg = 45;
-  float rad = deg * PI / 180;
-  //this is a pretty naive way to do this; down and near direction on DPAD prioritized if coflict arises. May need to shorten time window.
-  //check for diagonals
-  if (dpad_state[D_D_PIN] && dpad_state[D_N_PIN]){
-    xAxis = RADIUS*sin(rad);
-    yAxis = (-1*RADIUS) - RADIUS*(1-cos(rad));      
-  }
-  else if (dpad_state[D_D_PIN] && dpad_state[D_F_PIN]){
-    xAxis = RADIUS + RADIUS*sin(rad);
-    yAxis = 0 - RADIUS*(1-cos(rad));      
-  }
-  else if (dpad_state[D_U_PIN] && dpad_state[D_N_PIN]){
-    xAxis = (-1*RADIUS) + RADIUS*sin(rad);
-    yAxis = 0 - RADIUS*(1-cos(rad));
-  }
-  else if (dpad_state[D_U_PIN] && dpad_state[D_F_PIN]){
-    xAxis = RADIUS*sin(rad);
-    yAxis = RADIUS - RADIUS*(1-cos(rad));      
-  }
-  else {
-    if (dpad_state[D_N_PIN]){
-      xAxis = -RADIUS;
-      yAxis = 0;
-    }
-    else if (dpad_state[D_D_PIN]){
-      xAxis = 0;
-      yAxis = -RADIUS;
-    }
-    else if (dpad_state[D_F_PIN]){
-      xAxis = RADIUS;
-      yAxis = 0;
-    }
-    else if (dpad_state[D_U_PIN]){
-      xAxis = 0;
-      yAxis = RADIUS;
-    }    
-  }
-  Joystick.setXAxis(xAxis);
-  Joystick.setYAxis(yAxis);
 }
 // END FUNCTIONS
 
 // SETUP
 void setup() {
   for (byte i=0; i<MAX_SWITCHES; i++) pinMode(switch_pin[i],INPUT_PULLUP);
+  for (byte i=0; i<MAX_DPAD; i++) pinMode(dpad_pin[i],INPUT_PULLUP);
   //pinMode(13,OUTPUT); // on board LED -- no longer used. Consider using 3 analogs for LEDs?
   //digitalWrite(13,0);
   pinMode(RUD_UPWD_PIN,INPUT_PULLUP);
@@ -184,12 +134,71 @@ void loop() {
     
   // use 2 to 3 switches simultaneously (left, center, and right throttle-front buttons) to quickly calibrate the rotary encoder 
   // (THIS SETS ROTARY ENCODER TO MIN, MAX, OR ZERO)
+  // I actually find this kind of obnoxious after testing it so I disabled it and sped up the rotary. Can always add an option later
+  /*
   if (!digitalRead(switch_pin[RUD_RESET_LOW]) && !digitalRead(switch_pin[RUD_RESET_UPR]) && !digitalRead(switch_pin[RUD_RESET_CTL])) analog_value[MAX_ANALOG] = RUD_ZERO;
   else if (!digitalRead(switch_pin[RUD_RESET_LOW]) && !digitalRead(switch_pin[RUD_RESET_CTL])) analog_value[MAX_ANALOG] = RUD_MIN;
   else if (!digitalRead(switch_pin[RUD_RESET_UPR]) && !digitalRead(switch_pin[RUD_RESET_CTL])) analog_value[MAX_ANALOG] = RUD_MAX;
+  */
   analog_value[MAX_ANALOG] = analog_value[MAX_ANALOG] + read_rotary_encoder();
+  
+  //set_dpad_coords(); //moved into loop just in case calling void was the problem; move back later
+    //first, update the state with a debounce lag
+  for (byte i=0; i<MAX_DPAD; i++) { // read the dpad switches
+    dpad_reading = !digitalRead(dpad_pin[i]);
+    if (dpad_reading == dpad_state[i]) debounce_time[MAX_SWITCHES+i] = millis() + (unsigned long)DPAD_DEBOUNCE_TIME;
+    else if (millis() > debounce_time[MAX_SWITCHES+i]){ 
+      dpad_state[i] = dpad_reading;
+      debounce_time[MAX_SWITCHES+i] = millis() + (unsigned long)DPAD_DEBOUNCE_TIME;
+    }
+  } //END read the dpad
+  
+  float xAxis = 0;
+  float yAxis = 0;
+  //remember x2=x1+radius*sin(θ) and y2=y1-r*(1-cos(θ)); use θ=45 so
+  // we can just set from counterclockwise point if multiple pressed.
+  float deg = 45;
+  float rad = deg * PI / 180;
+  //this is a pretty naive way to do this; down and near direction on DPAD prioritized if coflict arises. May need to shorten time window.
+  //check for diagonals
+  if (dpad_state[D_D_PIN] && dpad_state[D_N_PIN]){
+    xAxis = RADIUS*sin(rad);
+    yAxis = (-1*RADIUS) - RADIUS*(1-cos(rad));      
+  }
+  else if (dpad_state[D_D_PIN] && dpad_state[D_F_PIN]){
+    xAxis = RADIUS + RADIUS*sin(rad);
+    yAxis = 0 - RADIUS*(1-cos(rad));      
+  }
+  else if (dpad_state[D_U_PIN] && dpad_state[D_N_PIN]){
+    xAxis = (-1*RADIUS) + RADIUS*sin(rad);
+    yAxis = 0 - RADIUS*(1-cos(rad));
+  }
+  else if (dpad_state[D_U_PIN] && dpad_state[D_F_PIN]){
+    xAxis = RADIUS*sin(rad);
+    yAxis = RADIUS - RADIUS*(1-cos(rad));      
+  }
+  else {
+  //simple controls
+    if (dpad_state[D_N_PIN]){
+      xAxis = -RADIUS;
+      yAxis = 0;
+    }
+    else if (dpad_state[D_D_PIN]){
+      xAxis = 0;
+      yAxis = -RADIUS;
+    }
+    else if (dpad_state[D_F_PIN]){
+      xAxis = RADIUS;
+      yAxis = 0;
+    }
+    else if (dpad_state[D_U_PIN]){
+      xAxis = 0;
+      yAxis = RADIUS;
+    }    
+  }
+  Joystick.setXAxis(xAxis);
+  Joystick.setYAxis(yAxis);
 
-  set_dpad_coords();
   
   Joystick.setRudder(analog_value[MAX_ANALOG]);
   Joystick.setThrottle(analog_value[MAX_ANALOG-1]);
