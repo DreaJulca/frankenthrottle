@@ -30,8 +30,8 @@
 //------------------------------------------------------------
 
 // CONFIG
-#define MAX_SWITCHES 6 // the number of BUTTONS (three on front of throttle, three on thumb--that leaves us two for toggle, four for dpad)
-byte switch_pin[MAX_SWITCHES] = {2,3,4,5,6,7}; // digital input pins -- we will not be using 13 for light
+#define MAX_SWITCHES 8 // the number of BUTTONS (three on front of throttle, three on thumb--that leaves us two for other digital in or out)
+byte switch_pin[MAX_SWITCHES] = {2,3,4,5,6,7,8,9}; // digital input pins -- we will not be using 13 for light
 
 #define MAX_DPAD 4 //number of digital dpad buttons; probably 4 but who knows, maybe diagonals on other versions?
 byte dpad_pin[MAX_DPAD] = {10,11,12,13}; //UP, LEFT(NEAR), RIGHT(FAR), DOWN
@@ -49,8 +49,8 @@ byte dpad_pin[MAX_DPAD] = {10,11,12,13}; //UP, LEFT(NEAR), RIGHT(FAR), DOWN
 #define MAX_ANALOG 1 // the number of analog inputs
 byte analog_pin[MAX_ANALOG] = {A0}; // analog input pins THROTTLE---for our CH throttle, use 2 analogs as digital for toggle to control RUDDER!
 
-#define RUD_UPWD_PIN 9 // rotary encoder CLK input -- toggle on front of CH throttle DOWN
-#define RUD_DNWD_PIN 8 // rotary encoder DATA input -- toggle on front of CH throttle UP
+#define RUD_UPWD_PIN A1 // rotary encoder CLK input -- toggle on front of CH throttle DOWN
+#define RUD_DNWD_PIN A2 // rotary encoder DATA input -- toggle on front of CH throttle UP
 #define RUD_RESET_LOW 0 // first button pin for ENC reset to min or zero (throttle front LEFT)
 #define RUD_RESET_UPR 1 // first button pin for ENC reset to max, second for zero (throttle front CENTER)
 #define RUD_RESET_CTL 2 // second button pin for ENC reset to min or max, third for zero (throttle front RIGHT) 
