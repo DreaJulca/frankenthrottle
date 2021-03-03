@@ -30,8 +30,8 @@
 //------------------------------------------------------------
 
 // CONFIG
-#define MAX_SWITCHES 8 // the number of BUTTONS (three on front of throttle, three on thumb--that leaves us two for other digital in or out)
-byte switch_pin[MAX_SWITCHES] = {2,3,4,5,6,7,8,9}; // digital input pins -- we will not be using 13 for light
+#define MAX_SWITCHES 10 // the number of BUTTONS (three on front of throttle, three on thumb--that leaves us two for other digital in or out)
+byte switch_pin[MAX_SWITCHES] = {2,3,4,5,6,7,8,9,A1,A2}; // digital input pins -- we will not be using 13 for light
 
 #define MAX_DPAD 4 //number of digital dpad buttons; probably 4 but who knows, maybe diagonals on other versions?
 byte dpad_pin[MAX_DPAD] = {10,11,12,13}; //UP, LEFT(NEAR), RIGHT(FAR), DOWN
@@ -96,8 +96,9 @@ void setup() {
   for (byte i=0; i<MAX_DPAD; i++) pinMode(dpad_pin[i],INPUT_PULLUP);
   //pinMode(13,OUTPUT); // on board LED -- no longer used. Consider using 3 analogs for LEDs?
   //digitalWrite(13,0);
-  pinMode(RUD_UPWD_PIN,INPUT_PULLUP);
-  pinMode(RUD_DNWD_PIN,INPUT_PULLUP);
+  //this part is fine, actually. But redund with these changes
+  /*pinMode(RUD_UPWD_PIN,INPUT_PULLUP);
+  pinMode(RUD_DNWD_PIN,INPUT_PULLUP);*/
 
   Joystick.begin(false);
   //axis ranges
@@ -105,7 +106,7 @@ void setup() {
   Joystick.setYAxisRange(-1*RADIUS, RADIUS);
 
   //rudder range
-  Joystick.setRudderRange(RUD_MIN, RUD_MAX);
+  /*Joystick.setRudderRange(RUD_MIN, RUD_MAX);*/ //no longer using
   
   //throttle range
   Joystick.setThrottleRange(0, 1023);
@@ -140,8 +141,10 @@ void loop() {
   else if (!digitalRead(switch_pin[RUD_RESET_LOW]) && !digitalRead(switch_pin[RUD_RESET_CTL])) analog_value[MAX_ANALOG] = RUD_MIN;
   else if (!digitalRead(switch_pin[RUD_RESET_UPR]) && !digitalRead(switch_pin[RUD_RESET_CTL])) analog_value[MAX_ANALOG] = RUD_MAX;
   */
-  analog_value[MAX_ANALOG] = analog_value[MAX_ANALOG] + read_rotary_encoder();
-  
+
+  //suppressed because it sucks as an analog
+  /*analog_value[MAX_ANALOG] = analog_value[MAX_ANALOG] + read_rotary_encoder();*/
+ 
   //set_dpad_coords(); //moved into loop just in case calling void was the problem; move back later
     //first, update the state with a debounce lag
   for (byte i=0; i<MAX_DPAD; i++) { // read the dpad switches
@@ -199,8 +202,8 @@ void loop() {
   Joystick.setXAxis(xAxis);
   Joystick.setYAxis(yAxis);
 
-  
-  Joystick.setRudder(analog_value[MAX_ANALOG]);
+  //actually this sucks. Instead of this, treat it like the button it is.
+  //Joystick.setRudder(analog_value[MAX_ANALOG]);
   Joystick.setThrottle(analog_value[MAX_ANALOG-1]);
   
   Joystick.sendState();
